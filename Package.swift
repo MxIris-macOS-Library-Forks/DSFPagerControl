@@ -1,11 +1,11 @@
-// swift-tools-version:5.3
+// swift-tools-version: 5.4
 
 import PackageDescription
 
 let package = Package(
 	name: "DSFPagerControl",
 	platforms: [
-		.macOS(.v10_11)
+		.macOS(.v10_13)
 	],
 	products: [
 		.library(name: "DSFPagerControl", targets: ["DSFPagerControl"]),
@@ -13,7 +13,7 @@ let package = Package(
 		.library(name: "DSFPagerControl-shared", type: .dynamic, targets: ["DSFPagerControl"]),
 	],
 	dependencies: [
-		.package(url: "https://github.com/dagronf/DSFAppearanceManager", from: "3.3.0"),
+		.package(url: "https://github.com/dagronf/DSFAppearanceManager", .upToNextMinor(from: "3.5.0")),
 	],
 	targets: [
 		.target(

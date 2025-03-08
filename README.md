@@ -57,6 +57,7 @@ If you copy the package source files into your project IBDesignables will show a
 | selectedPage             | `Int`          | The current page selection (Observable) |
 | selectedColor            | `NSColor?`     | The color to draw a selected page (nil to use default colors) |
 | unselectedColor          | `NSColor?`     | The color to draw an unselected page (nil to use default colors) |
+| bordered                 | `Bool`         | If true, draws a border around the unselected page indicators) |
 | boundsSize               | `CGSize`       | The size of the page indicator |
 | dotSize                  | `CGFloat`      | The size of the dot to be displayed in the center of the page indicator |
 | allowsKeyboardSelection  | `Bool`         | Allow the user to use the keyboard to focus and change the page selection |
@@ -88,6 +89,20 @@ func pagerControl(_ pager: DSFPagerControl, didMoveToPage page: Int)
 ```
 
 Called when the pager control has changed to a new page.
+
+## SwiftUI support
+
+You use `DSFPagerControlUI` to create a pager control within SwiftUI
+
+```swift
+DSFPagerControlUI(
+   pageCount: 10,
+   selectedPage: $selection,
+   allowsMouseSelection: true
+)
+```
+
+See the SwiftUI demo in the `Demo` subfolder.
 
 ## User interaction
 
@@ -122,25 +137,6 @@ Provide a block that returns a custom color to be used when drawing the selected
 
 Provide a block that returns a custom color to be used when drawing the unselected page indicator.
 
-## Releases
-
-
-### 2.0.0
-
-* Update to use DSFAppearanceManager instead
-
-### 1.0.2
-
-* Added isFirstPage/isLastPage observables
-
-### 1.0.1
-
-* Added next/prev methods
-
-### 1.0.0
-
-* Initial release
-
 ## License
 
 MIT. Use it and abuse it for anything you want, just attribute my work. Let me know if you do use it somewhere, it'd be great to hear about it!
@@ -148,7 +144,7 @@ MIT. Use it and abuse it for anything you want, just attribute my work. Let me k
 ```
 MIT License
 
-Copyright (c) 2022- Darren Ford
+Copyright (c) 2024- Darren Ford
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

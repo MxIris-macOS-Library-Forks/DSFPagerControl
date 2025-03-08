@@ -20,25 +20,21 @@
 #if os(macOS)
 
 import Foundation
-import Dispatch
+import QuartzCore
 
-class DSFDebounce {
-	
-	// MARK: - Properties
-	private let queue = DispatchQueue.main
-	private var workItem = DispatchWorkItem(block: {})
-	private var interval: TimeInterval
-	
-	// MARK: - Initializer
-	init(seconds: TimeInterval) {
-		self.interval = seconds
-	}
-	
-	// MARK: - Debouncing function
-	func debounce(action: @escaping (() -> Void)) {
-		workItem.cancel()
-		workItem = DispatchWorkItem(block: { action() })
-		queue.asyncAfter(deadline: .now() + interval, execute: workItem)
+extension CATransaction {
+	/// Runs the supplied block within a transaction block
+	/// - Parameters:
+	///   - disabled: If true, disables animations triggered actions within the block
+	///   - block: The block to perform
+	static func withDisabledActions(_ disabled: Bool = false, duration: Double? = nil, _ block: () -> Void) {
+		CATransaction.begin()
+		defer { CATransaction.commit() }
+		CATransaction.setDisableActions(disabled)
+		if let duration = duration {
+			CATransaction.setAnimationDuration(duration)
+		}
+		block()
 	}
 }
 

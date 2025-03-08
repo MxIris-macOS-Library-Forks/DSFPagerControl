@@ -1,27 +1,20 @@
 //
-//  DSFPagerView.swift
+//  Copyright © 2024 Darren Ford. All rights reserved.
 //
-//  Created by Darren Ford on 13/9/21.
+//  MIT license
 //
-//  MIT License
+//  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+//  documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+//  rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+//  permit persons to whom the Software is furnished to do so, subject to the following conditions:
 //
-//  Permission is hereby granted, free of charge, to any person obtaining a copy
-//  of this software and associated documentation files (the "Software"), to deal
-//  in the Software without restriction, including without limitation the rights
-//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-//  copies of the Software, and to permit persons to whom the Software is
-//  furnished to do so, subject to the following conditions:
+//  The above copyright notice and this permission notice shall be included in all copies or substantial
+//  portions of the Software.
 //
-//  The above copyright notice and this permission notice shall be included in all
-//  copies or substantial portions of the Software.
-//
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-//  SOFTWARE.
+//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+//  WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+//  OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+//  OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
 #if os(macOS)
@@ -35,28 +28,43 @@ import DSFAppearanceManager
 @IBDesignable
 public class DSFPagerControl: NSView {
 
-	/// The orientation for the control
-	@objc(DSFPagerControlOrientation)
-	public enum Orientation: Int {
-		/// Horizontal orientation
-		case horizontal = 0
-		/// Vertical orientation
-		case vertical   = 1
-	}
-
 	/// The delegate to receive feedback
 	@IBOutlet public weak var delegate: DSFPagerControlHandling?
 
 	/// Can the user use the keyboard to focus and change the selection?
-	@IBInspectable public var allowsKeyboardFocus: Bool = false
+	@IBInspectable public var allowsKeyboardFocus: Bool = false {
+		didSet {
+			self.needsLayout = true
+			self.needsDisplay = true
+		}
+	}
 
 	/// Can the user use the mouse to change the selection?
-	@IBInspectable public var allowsMouseSelection: Bool = false
+	@IBInspectable public var allowsMouseSelection: Bool = false {
+		didSet {
+			self.updateTrackingAreas()
+		}
+	}
 
 	/// The number of pages within the control
-	@IBInspectable public dynamic var pageCount: Int = 0 {
+	@IBInspectable public dynamic var pageCount: Int {
+		get { self._pageCount }
+		set {
+			if newValue != self._pageCount {
+				self._pageCount = newValue
+				self.rebuildDotLayers()
+			}
+		}
+	}
+
+	/// A Boolean value that indicates whether the receiver reacts to input events
+	@IBInspectable public var isEnabled: Bool = true {
 		didSet {
-			self.rebuildDotLayers()
+			self.needsLayout = true
+			self.colorsDidChange()
+			if self.isEnabled == false, self.window?.firstResponder == self {
+				self.window?.makeFirstResponder(nil)
+			}
 		}
 	}
 
@@ -66,7 +74,20 @@ public class DSFPagerControl: NSView {
 			return self._selected
 		}
 		set {
-			self._selected = self.clamped(newValue)
+			self.moveToPage(newValue)
+		}
+	}
+
+	/// The indicator shape
+	@objc public var indicatorShape: DSFPagerControlIndicatorShape = HorizontalIndicatorShape() {
+		didSet {
+			self.rebuildDotLayers()
+		}
+	}
+
+	@IBInspectable public var isHorizontal: Bool = true {
+		didSet {
+			self.indicatorShape = self.isHorizontal ? HorizontalIndicatorShape() : VerticalIndicatorShape()
 		}
 	}
 
@@ -100,48 +121,10 @@ public class DSFPagerControl: NSView {
 		}
 	}
 
-	/// The width of each page indicator
-	@IBInspectable public var pageIndicatorWidth: CGFloat = 20 {
+	/// Uses the selected color to draw a 0.5px border around each unselected page dot
+	@IBInspectable public var bordered: Bool = false {
 		didSet {
-			self.rebuildDotLayers()
-		}
-	}
-	/// The height of each page indicator
-	@IBInspectable public var pageIndicatorHeight: CGFloat = 20 {
-		didSet {
-			self.rebuildDotLayers()
-		}
-	}
-
-	/// The size of the page indicator
-	public var pageIndicatorSize: CGSize {
-		get {
-			return CGSize(width: self.pageIndicatorWidth, height: self.pageIndicatorHeight)
-		}
-		set {
-			self.pageIndicatorWidth = newValue.width
-			self.pageIndicatorHeight = newValue.height
-		}
-
-	}
-
-	/// The diameter of the dot within the page indicator
-	@IBInspectable public var dotSize: CGFloat = 8 {
-		didSet {
-			self.rebuildDotLayers()
-		}
-	}
-
-	@objc public var orientation: Orientation = .horizontal {
-		didSet {
-			self.rebuildDotLayers()
-		}
-	}
-
-	/// Horizontal/Vertical display
-	@IBInspectable public var isHorizontal: Bool = true {
-		didSet {
-			self.orientation = isHorizontal ? .horizontal : .vertical
+			self.colorsDidChange()
 		}
 	}
 
@@ -158,6 +141,50 @@ public class DSFPagerControl: NSView {
 			self.colorsDidChange()
 		}
 	}
+
+
+	////////
+	
+	/// The width of each page indicator. Only applies to the default indicator shapes
+	@IBInspectable public var pageIndicatorWidth: CGFloat = 20 {
+		didSet {
+			if let s = self.indicatorShape as? HorizontalIndicatorShape {
+				s.size = CGSize(width: pageIndicatorWidth, height: s.size.height)
+			}
+			if let s = self.indicatorShape as? VerticalIndicatorShape {
+				s.size = CGSize(width: pageIndicatorWidth, height: s.size.height)
+			}
+			self.rebuildDotLayers()
+		}
+	}
+
+	/// The height of each page indicator. Only applies to the default indicator shapes
+	@IBInspectable public var pageIndicatorHeight: CGFloat = 20 {
+		didSet {
+			if let s = self.indicatorShape as? HorizontalIndicatorShape {
+				s.size = CGSize(width: s.size.width, height: pageIndicatorHeight)
+			}
+			if let s = self.indicatorShape as? VerticalIndicatorShape {
+				s.size = CGSize(width: s.size.width, height: pageIndicatorHeight)
+			}
+			self.rebuildDotLayers()
+		}
+	}
+
+	/// The size of the dot. Only applies to the default indicator shapes
+	@IBInspectable public var dotSize: CGFloat = 8 {
+		didSet {
+			if let s = self.indicatorShape as? HorizontalIndicatorShape {
+				s.dotSize = self.dotSize
+			}
+			if let s = self.indicatorShape as? VerticalIndicatorShape {
+				s.dotSize = self.dotSize
+			}
+			self.rebuildDotLayers()
+		}
+	}
+
+	////////
 
 	/// Create
 	@objc override public init(frame frameRect: NSRect) {
@@ -176,6 +203,9 @@ public class DSFPagerControl: NSView {
 	}
 
 	// Private
+
+	// Internal page count
+	private var _pageCount: Int = 0
 
 	// Internal selected value.
 	private var _selected: Int = 0 {
@@ -196,7 +226,7 @@ public class DSFPagerControl: NSView {
 	}
 
 	// The layers currently on display
-	private var dotLayers: [DotLayer] = []
+	internal var dotLayers: [PageIndicatorLayer] = []
 
 	// The frame containing the dots
 	var dotsFrame: CGRect {
@@ -223,20 +253,18 @@ public extension DSFPagerControl {
 	}
 
 	override var intrinsicContentSize: NSSize {
-		switch self.orientation {
+		let i = self.indicatorShape
+		switch i.orientation {
 		case .horizontal:
-			return CGSize(width: self.pageIndicatorWidth * CGFloat(self.pageCount), height: self.pageIndicatorHeight)
+			return CGSize(width: i.size.width * CGFloat(self.pageCount), height: i.size.height)
 		case .vertical:
-			return CGSize(width: self.pageIndicatorWidth, height: self.pageIndicatorHeight * CGFloat(self.pageCount))
+			return CGSize(width: i.size.height, height: i.size.height * CGFloat(self.pageCount))
 		}
 	}
 
 	override func updateLayer() {
 		super.updateLayer()
-
-		CATransaction.setDisableActions(true)
 		self.relayoutLayers()
-		CATransaction.commit()
 	}
 
 	override func prepareForInterfaceBuilder() {
@@ -254,6 +282,8 @@ public extension DSFPagerControl {
 		if !self.allowsMouseSelection {
 			return
 		}
+
+		guard self.isEnabled else { return }
 
 		self.trackingArea = NSTrackingArea(
 			rect: self.dotsFrame,
@@ -299,7 +329,7 @@ extension DSFPagerControl: DSFAppearanceCacheNotifiable {
 		self.dotLayers.removeAll()
 
 		(0 ..< self.pageCount).forEach { index in
-			let dl = DotLayer(index: index, parent: self)
+			let dl = PageIndicatorLayer(index: index, parent: self)
 			self.layer!.addSublayer(dl)
 			self.dotLayers.append(dl)
 		}
@@ -322,69 +352,29 @@ extension DSFPagerControl: DSFAppearanceCacheNotifiable {
 
 	// Layout the dot layers
 	func relayoutLayers() {
-		switch self.orientation {
-		case .horizontal:
-			let w = (self.bounds.width - (self.pageIndicatorWidth * CGFloat(self.dotLayers.count))) / 2
-			var xOff: CGFloat = 0
-			self.dotLayers.forEach { l in
-				l.frame = CGRect(x: w + xOff, y: 0, width: self.pageIndicatorWidth, height: self.pageIndicatorHeight)
-				xOff += self.pageIndicatorWidth
-			}
-		case .vertical:
-			let h = (self.bounds.height - (self.pageIndicatorHeight * CGFloat(self.dotLayers.count))) / 2
-			var yOff: CGFloat = 0
-			self.dotLayers.forEach { l in
-				l.frame = CGRect(x: 0, y: h + yOff, width: self.pageIndicatorWidth, height: self.pageIndicatorHeight)
-				yOff += self.pageIndicatorHeight
+		let i = self.indicatorShape
+
+		CATransaction.withDisabledActions(DSFAppearanceManager.ReduceMotion) {
+			switch i.orientation {
+			case .horizontal:
+				let w = (self.bounds.width - (i.size.width * CGFloat(self.dotLayers.count))) / 2
+				var xOff: CGFloat = 0
+				self.dotLayers.forEach { l in
+					l.frame = CGRect(x: w + xOff, y: 0, width: i.size.width, height: i.size.height)
+					xOff += i.size.width
+				}
+			case .vertical:
+				let h = (self.bounds.height - (i.size.height * CGFloat(self.dotLayers.count))) / 2
+				var yOff: CGFloat = 0
+				self.dotLayers.forEach { l in
+					l.frame = CGRect(x: 0, y: h + yOff, width: i.size.width, height: i.size.height)
+					yOff += i.size.height
+				}
 			}
 		}
 	}
 }
 
-// MARK: - Keyboard and mouse handing
-
-import Carbon.HIToolbox
-
-public extension DSFPagerControl {
-	override var acceptsFirstResponder: Bool {
-		return allowsKeyboardFocus
-	}
-
-	override func drawFocusRingMask() {
-		let pth = NSBezierPath(roundedRect: self.dotsFrame, xRadius: 4, yRadius: 4)
-		pth.fill()
-	}
-
-	override var focusRingMaskBounds: NSRect {
-		return self.dotsFrame
-	}
-
-	override func keyDown(with event: NSEvent) {
-		// Handle some special chars
-		switch Int(event.keyCode) {
-		case kVK_LeftArrow, kVK_UpArrow:
-			self.moveToPreviousPage()
-		case kVK_RightArrow, kVK_DownArrow:
-			self.moveToNextPage()
-
-		default:
-			super.keyDown(with: event)
-		}
-	}
-
-	override func mouseDown(with event: NSEvent) {
-		if !allowsMouseSelection {
-			return
-		}
-
-		let point = self.convert(event.locationInWindow, from: nil)
-		guard let whichLayer = self.dotLayers.first(where: { $0.frame.contains(point) }) else {
-			return
-		}
-
-		self.moveToPage(whichLayer.index)
-	}
-}
 
 // MARK: - Page changing
 
@@ -404,35 +394,42 @@ public extension DSFPagerControl {
 	///
 	/// Will call the delegate methods to validate the change
 	@objc func moveToNextPage() {
-		self.moveToPage(self.clamped(self.selectedPage + 1))
+		if _selected == self.pageCount - 1 {
+			NSSound.beep()
+			return
+		}
+		self.moveToPage(self.selectedPage + 1)
 	}
 
 	/// Move to the previous page in the pager. If the current page is the first page, does nothing
 	///
 	/// Will call the delegate methods to validate the change
 	@objc func moveToPreviousPage() {
-		self.moveToPage(self.clamped(self.selectedPage - 1))
+		if _selected == 0 {
+			NSSound.beep()
+			return
+		}
+		self.moveToPage(self.selectedPage - 1)
 	}
 }
 
-private extension DSFPagerControl {
+internal extension DSFPagerControl {
 	// Must be called with a valid page range
 	func moveToPage(_ page: Int) {
-		assert((0 ..< self.pageCount).contains(page))
 
-		if self.selectedPage == page {
+		if self._selected == page {
 			return
 		}
-		if self.delegate?.pagerControl(self, willMoveToPage: page) ?? true {
-			self.selectedPage = page
+
+		guard (0 ..< self.pageCount).contains(page) else {
+			NSSound.beep()
+			return
 		}
 
-		NSAccessibility.post(element: self, notification: .selectedChildrenChanged)
-	}
-
-	// Clamp page to the current page count
-	func clamped(_ page: Int) -> Int {
-		max(0, min(self.pageCount - 1, page))
+		if self.delegate?.pagerControl(self, willMoveToPage: page) ?? true {
+			self._selected = page
+			NSAccessibility.post(element: self, notification: .selectedChildrenChanged)
+		}
 	}
 }
 
@@ -468,7 +465,7 @@ public extension DSFPagerControl {
 // MARK: - Layer drawing
 
 extension DSFPagerControl {
-	class DotLayer: CAShapeLayer {
+	class PageIndicatorLayer: CAShapeLayer {
 		let index: Int
 		unowned var parent: DSFPagerControl
 
@@ -486,14 +483,13 @@ extension DSFPagerControl {
 		}
 
 		override init(layer: Any) {
-			guard let e = layer as? DSFPagerControl.DotLayer else {
+			guard let e = layer as? DSFPagerControl.PageIndicatorLayer else {
 				fatalError()
 			}
 			self.parent = e.parent
 			self.index = e.index
+			self.isSelected = e.isSelected
 			super.init(layer: layer)
-
-			self.setup()
 		}
 
 		@available(*, unavailable)
@@ -506,47 +502,41 @@ extension DSFPagerControl {
 		}
 
 		func updateDisplay() {
+			CATransaction.withDisabledActions(DSFAppearanceManager.ReduceMotion) {
 
-			if #available(macOS 10.12, *) {
-				if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion == true {
-					CATransaction.setDisableActions(true)
-				}
-			} else {
-				// Fallback on earlier versions
-			}
+				self.opacity = self.parent.isEnabled ? 1.0 : 0.2
 
-			let isHighContrast = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
-
-			self.parent.usingEffectiveAppearance {
-				if isSelected {
-					self.fillColor = self.parent._selectedFillColor.cgColor
-					self.strokeColor = self.parent._selectedFillColor.cgColor
-				}
-				else {
-					if isHighContrast {
+				self.parent.usingEffectiveAppearance {
+					if self.isSelected {
+						self.fillColor = self.parent._selectedFillColor.cgColor
 						self.strokeColor = self.parent._selectedFillColor.cgColor
-						self.fillColor = nil
 					}
 					else {
-						self.fillColor = self.parent._unselectedStrokeColor.cgColor
-						self.strokeColor = self.parent._unselectedStrokeColor.cgColor
+						if DSFAppearanceManager.IncreaseContrast {
+							self.strokeColor = self.parent._selectedFillColor.cgColor
+							self.fillColor = nil
+							self.lineWidth = 1
+						}
+						else if self.parent.bordered {
+							self.strokeColor = self.parent._selectedFillColor.cgColor
+							self.fillColor = self.parent._unselectedStrokeColor.cgColor
+							self.lineWidth = 0.5
+						}
+						else {
+							self.fillColor = self.parent._unselectedStrokeColor.cgColor
+							self.strokeColor = self.parent._unselectedStrokeColor.cgColor
+						}
 					}
 				}
 			}
-			self.lineWidth = 1
-
-			CATransaction.commit()
 		}
 
 		override func layoutSublayers() {
 			super.layoutSublayers()
-
-			let ds: CGFloat = self.parent.dotSize
-
-			let xO = max(0, (self.parent.pageIndicatorWidth - ds) / 2)
-			let yO = max(0, (self.parent.pageIndicatorHeight - ds) / 2)
-
-			self.path = CGPath(ellipseIn: CGRect(x: xO, y: yO, width: ds, height: ds), transform: nil)
+			self.path = self.parent.indicatorShape.path(
+				selectedPage: index,
+				totalPageCount: self.parent.pageCount
+			)
 		}
 	}
 }

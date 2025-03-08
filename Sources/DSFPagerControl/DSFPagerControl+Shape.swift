@@ -20,25 +20,31 @@
 #if os(macOS)
 
 import Foundation
-import Dispatch
+import AppKit
 
-class DSFDebounce {
-	
-	// MARK: - Properties
-	private let queue = DispatchQueue.main
-	private var workItem = DispatchWorkItem(block: {})
-	private var interval: TimeInterval
-	
-	// MARK: - Initializer
-	init(seconds: TimeInterval) {
-		self.interval = seconds
-	}
-	
-	// MARK: - Debouncing function
-	func debounce(action: @escaping (() -> Void)) {
-		workItem.cancel()
-		workItem = DispatchWorkItem(block: { action() })
-		queue.asyncAfter(deadline: .now() + interval, execute: workItem)
+import DSFAppearanceManager
+
+@objc public protocol DSFPagerControlIndicatorShape {
+	/// The orientation for the control
+	@objc var orientation: DSFPagerControl.Orientation { get }
+	/// The size of the page indicator
+	@objc var size: CGSize { get }
+	/// The path representing the page indicator
+	/// - Parameters:
+	///   - selectedPage: The currently selected page index
+	///   - totalPageCount: The total number of pages in the control
+	/// - Returns: A path
+	@objc func path(selectedPage: Int, totalPageCount: Int) -> CGPath
+}
+
+public extension DSFPagerControl {
+	/// The orientation for the control
+	@objc(DSFPagerControlOrientation)
+	enum Orientation: Int {
+		/// Horizontal orientation
+		case horizontal = 0
+		/// Vertical orientation
+		case vertical   = 1
 	}
 }
 
